@@ -7,6 +7,11 @@
 		"outDir": "dist"
 	},
 	"files": [
-		"src/pricey.ts"
+		"src/pricey.ts",
+		"src/currency.ts",
+		"src/DiscountDecorator.ts",
+		"src/helper.ts",
+		"src/Price.ts",
+		"src/TaxDecorator.ts"
 	]
 }

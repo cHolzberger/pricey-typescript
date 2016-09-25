@@ -1,49 +1,31 @@
-export interface PriceySettings {
-    accuracy: number,
-    dec: number
-}
+import {Currency} from "./currency";
+import {IPrice, Price, PriceDecorator} from "./Price";
+export {currencies} from "./currency";
+import {PriceWithTaxDecorator,  PriceWithAddTaxDecorator, PriceIncludingTaxDecorator} from "./TaxDecorator";
+import {PriceWithPercentualDiscountDecorator} from "./DiscountDecorator";
+import {_internalToAmount,_amountToInternal} from "./helper";
 
 export interface ICalulation {
-    add(p: IPrice): ICalulation;
     toString(): string;
-}
-
-
-export interface IPrice {
-    amount: number;
-    settings: PriceySettings;
-    toString(): string;
-//  toJSON(): string;
-}
-
-export abstract class PriceDecorator implements IPrice {
-    _price: Price;
-    settings: PriceySettings;
-    get decoratedPrice():Price {
-      return this._price;
-    }
-
-    abstract get annotation():string;
-    abstract get amount(): number;
-    abstract toString(): string;
 }
 
 export class Calculation implements ICalulation {
     _prices: IPrice[] = [];
     _taxRates: number[] = [];
-    add(p: IPrice): Calculation {
-        this._prices.push(p);
 
-        if (p instanceof PriceWithAddTaxDecorator) {
+    constructor(a:IPrice[]) {
+      this._prices = a;
+
+      a.forEach ( p => {
+        if (p instanceof PriceWithTaxDecorator) {
             this._taxRates.push(p.taxRate);
         }
-
-        return this;
+      });
     }
 
-    _getAnnotations(p:Price):string[] {
+    _getAnnotations(p:IPrice):string[] {
       if ( p instanceof PriceDecorator) {
-        return [p.annotation].concat(this._getAnnotations(p.decoratedPrice));
+        return [(<PriceDecorator>p).annotation].concat(this._getAnnotations(p.decoratedPrice));
       }
 
       return [];
@@ -87,126 +69,14 @@ export class Calculation implements ICalulation {
 
 
 
-export class Price implements IPrice {
-    settings: PriceySettings;
-    _internalAmmount: number;
-
-    constructor(c: { amount: number, settings: PriceySettings }) {
-        this.settings = c.settings;
-        this._internalAmmount = c.amount;
-    }
-
-    get amount(): number {
-        return this._internalAmmount / Math.pow(10, this.settings.accuracy);
-    }
-
-    toString() {
-        return this.amount.toFixed(2);
-    }
-}
-
-//fixme move common code here
-export abstract class PriceWithTaxDecorator extends PriceDecorator {
-    _price: Price;
-    _tax: number;
 
 
-    constructor(p: Price, c: { tax: number }) {
-        super();
-        this._price = p;
-        this._tax = c.tax;
-    }
 
-    get settings(): PriceySettings {
-        return this._price.settings;
-    }
-
-    get amount(): number {
-        return ((this._internalAmmount) / Math.pow(10, this._price.settings.accuracy));
-    }
-
-    toString(): string {
-        return `${this.amount.toFixed(2)}`;
-    }
-
-    abstract get _internalTax(): number;
-    abstract get _internalAmmount(): number;
-
-    get tax(): number {
-        return this._internalTax / Math.pow(10, this._price.settings.accuracy);
-    }
-
-    get taxRate(): number {
-        return this._tax;
-    }
-
-    get annotation(): string {
-      return `including ${this.tax.toFixed(2)} (${this.taxRate}%) Tax`;
-    }
-}
-
-export class PriceWithAddTaxDecorator extends PriceWithTaxDecorator {
-
-    get _internalTax(): number {
-        return (this._price._internalAmmount * this._tax) / 100;
-    }
-
-    get _internalAmmount(): number {
-        return (this._price._internalAmmount + this._internalTax);
-    }
-}
-export class PriceIncludingTaxDecorator extends PriceWithTaxDecorator {
-    get _internalAmmount(): number {
-        return (this._price._internalAmmount);
-    }
-
-    get _internalTax(): number { // FIXME: right formular
-        return this._price._internalAmmount - (this._price._internalAmmount / ((100 + this._tax) / 100));
-    }
-
-}
-
-export class PriceWithPercentualDiscountDecorator extends PriceDecorator {
-    _price: Price;
-    _discount: number;
-
-    constructor(p: Price, c: { discount: number }) {
-      super();
-        this._price = p;
-        this._discount = c.discount;
-    }
-
-    get settings(): PriceySettings {
-        return this._price.settings;
-    }
-
-    get _internalDiscount(): number {
-        return (this._price._internalAmmount * this._discount) / 100;
-    }
-
-    get _internalAmmount(): number {
-        return this._price._internalAmmount - this._internalDiscount;
-    }
-
-    get discount(): number {
-        return this._internalDiscount / Math.pow(10, this._price.settings.accuracy);
-    }
-
-    get amount(): number {
-        return this._internalAmmount / Math.pow(10, this._price.settings.accuracy);
-    }
-
-    toString(): string {
-        return this.amount.toFixed(2);
-    }
-
-    get annotation():string {
-      return `having ${this.discount} discount`;
-    }
-}
 
 export default class Pricey {
-    static createPrice(price: string | number, config: PriceySettings): Price {
+
+
+    static createPrice(price: string | number, currency: Currency): Price {
         var f: number = 0;
         console.log("Create price: %s", price);
 
@@ -215,11 +85,11 @@ export default class Pricey {
         } else if (typeof price === 'number') {
             f = price;
         }
-        var repr: number = f * Math.pow(10, config.accuracy);
-        return new Price({ amount: repr, settings: config });
+        var repr: number = _amountToInternal(currency, f);
+        return new Price({ amount: repr, currency: currency });
     }
 
-    static hasTax(p: Price): boolean {
+    static hasTax(p: IPrice): boolean {
         if (p instanceof PriceWithTaxDecorator) {
             return true;
         }
@@ -232,18 +102,25 @@ export default class Pricey {
     }
 
     static addTax(p: Price, t: number) {
-        return new PriceWithAddTaxDecorator(p, { tax: t });
+      if ( Pricey.hasTax(p) ) {
+        throw 'Price allready has tax';
+      }
+      return new PriceWithAddTaxDecorator(p, { tax: t });
     }
 
     static includingTax(p: Price, t: number) {
-        return new PriceIncludingTaxDecorator(p, { tax: t });
+      if ( Pricey.hasTax(p) ) {
+        throw 'Price allready has tax';
+      }
+
+      return new PriceIncludingTaxDecorator(p, { tax: t });
     }
 
     static addDiscount(p: Price, t: number) {
         return new PriceWithPercentualDiscountDecorator(p, { discount: t });
     }
 
-    static createCalulation(): Calculation {
-        return new Calculation();
+    static createCalulation(arr:IPrice[]): Calculation {
+        return new Calculation(arr);
     }
 }

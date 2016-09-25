@@ -2,6 +2,8 @@
 
 This is a playground for price related code. It can be useful for Shopping-Carts oder generated Bills.
 
+Inspired by money-js.
+
 The following features are implemented:
 * Having a basic price type
 * Adding or Substracting Tax from the price (without changing the price implemented as decorators)
