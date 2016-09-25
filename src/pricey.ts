@@ -32,10 +32,15 @@ export class Calculation implements ICalulation {
             total += price.ammount;
             str += price.toString();
             str += "\n";
+            price.annotations.forEach((a:IPriceAnnotation) => {
+              str += "\t\t" + a.text + "\n";
+            });
+
+            str += "\n";
 
             if (price instanceof PriceWithPercentualDiscountDecorator) {
                 discounts += price.discount;
-            } else if (price instanceof PriceWithAddTaxDecorator) {
+            } else if (price instanceof PriceWithTaxDecorator) {
                 tax[price.taxRate] += price.tax;
             }
 
@@ -52,19 +57,26 @@ export class Calculation implements ICalulation {
     }
 }
 
+export interface IPriceAnnotation {
+  text: string
+}
+
 export interface IPrice {
     ammount: number;
     settings: PriceySettings;
-    toString(): string,
+    annotations: IPriceAnnotation[];
+    toString(): string;
 }
 
 export class Price implements IPrice {
     settings: PriceySettings;
     _internalAmmount: number;
+    annotations: IPriceAnnotation[];
 
     constructor(c: { ammount: number, settings: PriceySettings }) {
         this.settings = c.settings;
         this._internalAmmount = c.ammount;
+        this.annotations=[];
     }
 
     get ammount(): number {
@@ -81,6 +93,7 @@ export abstract class PriceWithTaxDecorator implements IPrice {
     _price: Price;
     _tax: number;
 
+
     constructor(p: Price, c: { tax: number }) {
         this._price = p;
         this._tax = c.tax;
@@ -94,8 +107,12 @@ export abstract class PriceWithTaxDecorator implements IPrice {
         return ((this._internalAmmount) / Math.pow(10, this._price.settings.accuracy));
     }
 
+    get annotations(): IPriceAnnotation[] {
+      return this._price.annotations.concat([{text: `including ${this._tax}% tax ${this.tax.toFixed(2)}`}]);
+    }
+
     toString(): string {
-        return `${this.ammount.toFixed(2)} \tincluding ${this._tax}% tax ${this.tax.toFixed(2)}`;
+        return `${this.ammount.toFixed(2)}`;
     }
 
     abstract get _internalTax(): number;
@@ -120,8 +137,8 @@ export class PriceWithAddTaxDecorator extends PriceWithTaxDecorator {
         return (this._price._internalAmmount + this._internalTax);
     }
 
-    toString(): string {
-        return `${this.ammount.toFixed(2)} \tincluding ->${this._tax}% tax ${this.tax.toFixed(2)}`;
+    get annotations(): IPriceAnnotation[] {
+      return this._price.annotations.concat([{text: `including ->${this._tax}% tax ${this.tax.toFixed(2)}`}]);
     }
 }
 export class PriceWithSubtractTaxDecorator extends PriceWithTaxDecorator {
@@ -132,8 +149,9 @@ export class PriceWithSubtractTaxDecorator extends PriceWithTaxDecorator {
     get _internalTax(): number { // FIXME: right formular
         return this._price._internalAmmount - (this._price._internalAmmount / ((100 + this._tax) / 100));
     }
-    toString(): string {
-        return `${this.ammount.toFixed(2)} \tincluding <-${this._tax}% tax ${this.tax.toFixed(2)}`;
+
+    get annotations(): IPriceAnnotation[] {
+      return this._price.annotations.concat([{text: `including <-${this._tax}% tax ${this.tax.toFixed(2)}`}]);
     }
 }
 
@@ -166,8 +184,12 @@ export class PriceWithPercentualDiscountDecorator implements IPrice {
         return this._internalAmmount / Math.pow(10, this._price.settings.accuracy);
     }
 
+    get annotations(): IPriceAnnotation[] {
+      return this._price.annotations.concat([{text: `having ${this._discount}% discount`}]);
+    }
+
     toString(): string {
-        return `${this.ammount.toFixed(2)} \thaving ${this._discount}% discount`;
+        return this._price.toString();
     }
 }
 
