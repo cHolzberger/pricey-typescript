@@ -1,0 +1,23 @@
+{
+  "name": "priceyjs",
+  "version": "0.0.1",
+  "description": "Price Utility Functions",
+  "main": "src/pricey.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "preinstall": "npm install autodts",
+    "postinstall": "autodts link",
+    "prepublish": "tsc && autodts generate",
+    "test": "node tests/test.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "autodts": "0.0.6"
+  },
+  "devDependencies": {
+    "typescript": "^2.0.3"
+  }
+}
